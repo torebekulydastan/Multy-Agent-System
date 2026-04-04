@@ -1,7 +1,8 @@
 from typing import List, Dict, Optional
 import logging
 import uuid
-from qdrant_client import QdrantClient
+
+from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
 from .embeddings import FastEmbedEmbeddings
@@ -22,6 +23,9 @@ class QdrantVectorStore:
         self.client = QdrantClient(host=host, port=port)
         self._collection_ready = False
 
+        self.dense_vector_name = "dense"
+        self.sparse_vector_name = "bm25_sparse"
+
     def ensure_collection(self) -> None:
         if self._collection_ready:
             return
@@ -38,12 +42,19 @@ class QdrantVectorStore:
         if self.collection_name not in existing_names:
             self.client.create_collection(
                 collection_name=self.collection_name,
-                vectors_config=VectorParams(
-                    size=vector_size,
-                    distance=Distance.COSINE
-                )
+                vectors_config={
+                    self.dense_vector_name: VectorParams(
+                        size=vector_size,
+                        distance=Distance.COSINE
+                    )
+                },
+                sparse_vectors_config={
+                    self.sparse_vector_name: models.SparseVectorParams(
+                        modifier=models.Modifier.IDF
+                    )
+                }
             )
-            logger.info(f"Collection '{self.collection_name}' created")
+            logger.info(f"Hybrid collection '{self.collection_name}' created")
         else:
             logger.info(f"Collection '{self.collection_name}' already exists")
 
@@ -53,6 +64,7 @@ class QdrantVectorStore:
         metadatas: Optional[List[Dict]] = None
     ) -> List[str]:
         self.ensure_collection()
+
         if not documents:
             return []
 
@@ -60,12 +72,15 @@ class QdrantVectorStore:
             metadatas = [{} for _ in documents]
 
         texts = [doc["text"] for doc in documents]
-        vectors = self.embeddings.embed_documents(texts)
+        dense_vectors = self.embeddings.embed_documents(texts)
+
+        # Для BM25 нужен avg_len по корпусу
+        avg_document_length = sum(len(text.split()) for text in texts) / max(len(texts), 1)
 
         points = []
         ids = []
 
-        for text, vector, metadata in zip(texts, vectors, metadatas):
+        for text, dense_vector, metadata in zip(texts, dense_vectors, metadatas):
             point_id = str(uuid.uuid4())
             ids.append(point_id)
 
@@ -77,7 +92,14 @@ class QdrantVectorStore:
             points.append(
                 PointStruct(
                     id=point_id,
-                    vector=vector,
+                    vector={
+                        self.dense_vector_name: dense_vector,
+                        self.sparse_vector_name: models.Document(
+                            text=text,
+                            model="Qdrant/bm25",
+                            options={"avg_len": avg_document_length}
+                        )
+                    },
                     payload=payload
                 )
             )
@@ -87,27 +109,48 @@ class QdrantVectorStore:
             points=points
         )
 
-        logger.info(f"Added {len(points)} documents to Qdrant")
+        logger.info(f"Added {len(points)} documents to hybrid Qdrant collection")
         return ids
 
     def similarity_search(self, query: str, k: int = 5) -> List[Dict]:
         self.ensure_collection()
-        query_vector = self.embeddings.embed_query(query)
+
+        dense_query_vector = self.embeddings.embed_query(query)
+
+        prefetch_limit = max(k * 3, 10)
 
         results = self.client.query_points(
             collection_name=self.collection_name,
-            query=query_vector,
+            prefetch=[
+                models.Prefetch(
+                    query=dense_query_vector,
+                    using=self.dense_vector_name,
+                    limit=prefetch_limit,
+                ),
+                models.Prefetch(
+                    query=models.Document(
+                        text=query,
+                        model="Qdrant/bm25"
+                    ),
+                    using=self.sparse_vector_name,
+                    limit=prefetch_limit,
+                ),
+            ],
+            query=models.FusionQuery(
+                fusion=models.Fusion.RRF
+            ),
             limit=k,
             with_payload=True
         ).points
 
         output = []
         for point in results:
+            payload = point.payload or {}
             output.append({
-                "id": point.id,
+                "id": str(point.id),
                 "score": point.score,
-                "text": point.payload.get("text", ""),
-                "metadata": point.payload
+                "text": payload.get("text", ""),
+                "metadata": payload
             })
 
         return output
