@@ -5,10 +5,11 @@ load_dotenv()
 
 
 class Config:
-    class Qdrant:
-        HOST = os.getenv("QDRANT_HOST", "localhost")
-        PORT = int(os.getenv("QDRANT_PORT", 6333))
-        COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "documents")
+    DEEPSEEK_API_KEY = os.getenv("API_KEY") or os.getenv("DEEPSEEK_API_KEY", "")
+
+    MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "rag_chat_db")
+
 
     class Embeddings:
         MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")

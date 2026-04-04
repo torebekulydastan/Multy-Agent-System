@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16
-    container_name: rag_postgres
+    container_name: rag_agent_postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: rag_db
@@ -14,11 +14,8 @@ services:
 
   mongo:
     image: mongo:8
-    container_name: rag_mongo
+    container_name: rag_agent_mongo
     restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin123
     ports:
       - "27017:27017"
     volumes:
@@ -26,7 +23,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: rag_qdrant
+    container_name: rag_agent_qdrant
     restart: unless-stopped
     ports:
       - "6333:6333"

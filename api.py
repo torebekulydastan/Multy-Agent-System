@@ -2,7 +2,7 @@ from fastapi import FastAPI,UploadFile,File,HTTPException
 from pydantic import BaseModel
 import shutil
 from pathlib import Path
-
+from RAG_AGENT.agent import run_agentic_rag
 from src.rag_engine import RAGEngine
 
 app = FastAPI(title='rag api')
@@ -13,6 +13,10 @@ rag = RAGEngine()
 UPLOAD_DIR = Path('uploads')
 UPLOAD_DIR.mkdir(exist_ok = True)
 
+
+class RAG_AgentRequest(BaseModel):
+    question:str
+    session_id:str|None=None
 class QureyRequest(BaseModel):
     question:str
     top_k: int = 5
@@ -42,6 +46,13 @@ async def upload_file(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post('/rag_agent')
+def agent_query(request: RAG_AgentRequest):
+    try:
+        result = run_agentic_rag(question=request.question,session_id=request.session_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))
 
 
 @app.post('/query')
