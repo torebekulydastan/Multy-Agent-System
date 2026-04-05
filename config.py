@@ -11,6 +11,14 @@ class Config:
     MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "rag_chat_db")
 
 
+    POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", 5432))
+    POSTGRES_DB = os.getenv("POSTGRES_DB", "postgres")
+    POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
+    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
+
+
+
     class Embeddings:
         MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
 
@@ -26,6 +34,8 @@ class Config:
 
     class RAG:
         TOP_K_RESULTS = int(os.getenv("TOP_K_RESULTS", 5))
+
+
 
 
 RAG_PROMPT_TEMPLATE = """

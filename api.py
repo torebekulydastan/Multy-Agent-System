@@ -4,10 +4,16 @@ import shutil
 from pathlib import Path
 from RAG_AGENT.agent import run_agentic_rag
 from src.rag_engine import RAGEngine
-
+from config import Config
+from src.chat_history import MongoChatHistory
 app = FastAPI(title='rag api')
 
 rag = RAGEngine()
+
+chat_history_store = MongoChatHistory(
+    mongo_uri=Config.MONGO_URI,
+    db_name=Config.MONGO_DB_NAME
+)
 
 
 UPLOAD_DIR = Path('uploads')
@@ -64,6 +70,37 @@ def query_docs(request: QureyRequest):
         raise HTTPException(status_code = 500,detail=str(e))
 
 
+@app.get("/messages/grouped")
+def get_messages_grouped():
+    try:
+        sessions = chat_history_store.list_sessions(limit=50)
+
+        if not sessions:
+            return {
+                "message": "No sessions found",
+                "sessions": []
+            }
+
+        result = []
+
+        for session in sessions:
+            session_id = session["_id"]
+            messages = chat_history_store.get_messages(session_id=session_id, limit=10)
+
+            result.append({
+                "session_id": session_id,
+                "messages": messages
+            })
+
+        return {
+            "count": len(result),
+            "sessions": result
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/documents")
 def get_documents():
     return rag.get_documents_info()
@@ -76,3 +113,19 @@ def delete_document(doc_id: str):
         raise HTTPException(status_code=404, detail=result)
     return result
 
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: str):
+    try:
+        deleted = chat_history_store.delete_session(session_id)
+
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return {
+            "session_id": session_id,
+            "deleted": True,
+            "message": "Session and all messages deleted"
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

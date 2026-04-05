@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
-
+from RAG_AGENT.prompts import MAIN_AGENT_SYSTEM_PROMPT, SQL_SUBAGENT_SYSTEM_PROMPT, MAIN_AGENT_USER_PROMPT
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_deepseek import ChatDeepSeek
 
-from RAG_AGENT.tools import rag_search
+from RAG_AGENT.tools import rag_search,sql_subagent_tool
 from src.chat_history import MongoChatHistory
 from config import Config
 
@@ -34,14 +34,9 @@ def build_agent():
 
     agent = create_agent(
         model=llm,
-        tools=[rag_search],
-        system_prompt=(
-            "You are a helpful RAG agent. "
-            "Use the rag_search tool when the user asks about uploaded or indexed documents. "
-            "If you use the tool, base your answer on the retrieved chunks. "
-            "If no relevant context is found, say that the knowledge base did not return enough information. "
-            "Do not invent facts that are not supported by the retrieved context."
-        ),
+        tools=[rag_search,sql_subagent_tool],
+        system_prompt=MAIN_AGENT_SYSTEM_PROMPT,
+
     )
     return agent
 
@@ -56,7 +51,7 @@ def run_agentic_rag(question: str, session_id: str | None = None):
         session_id=session_id,
         role="user",
         content=question,
-        meta={"mode": "agentic_rag"}
+        meta={"mode": "multy_agentic_rag"}
     )
 
     history_messages = chat_history_store.get_messages(session_id=session_id, limit=10)
@@ -68,14 +63,7 @@ def run_agentic_rag(question: str, session_id: str | None = None):
         for msg in previous_messages
     )
 
-    user_prompt = (
-        
-    "You MUST use the conversation history to answer the question.\n\n"
-    f"Conversation history:\n{history_text}\n\n"
-    f"User question:\n{question}\n\n"
-    "If the answer depends on previous messages, use them."
-)
-    
+    user_prompt =MAIN_AGENT_USER_PROMPT.format(history_text=history_text, question=question)
 
     result = agent.invoke({
         "messages": [

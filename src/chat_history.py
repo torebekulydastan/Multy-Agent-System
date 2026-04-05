@@ -112,3 +112,4 @@ class MongoChatHistory:
         result = self.sessions.delete_one({"_id": session_id})
         self.messages.delete_many({"session_id": session_id})
         return result.deleted_count > 0
+        

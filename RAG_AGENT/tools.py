@@ -1,6 +1,7 @@
 from langchain_core.tools import tool
 from src.rag_engine import RAGEngine
 import logging
+from RAG_AGENT.sql_subagent import ask_sql_subagent
 
 logger = logging.getLogger(__name__)
 
@@ -42,3 +43,15 @@ def rag_search(query: str, k: int = 5) -> list:
     except Exception as e:
         logger.error(f"Error in rag_search tool: {e}")
         return []
+
+
+@tool
+def sql_subagent_tool(question: str) -> str:
+    """
+    Use the SQL subagent to answer questions that require PostgreSQL data.
+    """
+    try:
+        return ask_sql_subagent(question)
+    except Exception as e:
+        logger.error(f"Error in sql_subagent_tool: {e}")
+        return f"SQL subagent error: {str(e)}"
